@@ -23,7 +23,7 @@ WHERE
 SELECT
     osm_id AS __id__,
     {% filter geometry %}way{% endfilter %} AS __geometry__,
-    'openstreetmap' AS source,
+    'openstreetmap.org' AS source,
     name,
     aeroway,
     aerialway,
@@ -68,6 +68,14 @@ SELECT
     leisure,
     sport,
     man_made,
+{% if zoom >= 12 %}
+    -- try to only calculate whether this is a bus route when we already know
+    -- that it's a road, as joining onto the rels table can be expensive.
+    CASE WHEN mz_calculate_highway_level(highway, service) IS NOT NULL
+      THEN mz_calculate_is_bus_route(osm_id)
+      ELSE NULL
+    END AS is_bus_route,
+{% endif %}
     %#tags AS tags
 
 FROM planet_osm_line
@@ -88,7 +96,7 @@ UNION ALL
 SELECT
     osm_id AS __id__,
     {% filter geometry %}way{% endfilter %} AS __geometry__,
-    'openstreetmap' AS source,
+    'openstreetmap.org' AS source,
     COALESCE(tags->'piste:name', name) AS name,
     NULL AS aeroway,
     NULL AS aerialway,
@@ -127,6 +135,7 @@ SELECT
     leisure,
     sport,
     man_made,
+    NULL AS is_bus_route,
     %#tags AS tags
 
 FROM planet_osm_line

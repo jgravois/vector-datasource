@@ -70,6 +70,21 @@ Read the full details in the project [CHANGELOG](https://github.com/mapzen/vecto
 
 Ordering of features - which ones draw "on top of" other features - can be an important feature of display maps. To help out with this, we export a `sort_key` property on some features which suggests in what order the features should appear. Lower numbers mean that features should appear "towards the back" and higher numbers mean "towards the front". These numbers are consistent across layers. The layers which include `sort_key` on their features are: `boundaries`, `buildings`, `earth`, `landuse`, `roads`, `transit` and `water`.
 
+To facilitate **data visualization** overlays and underlays, the following client-side `order` ranges are suggested:
+
+* `0-9`: Under everything. _Tip: disable earth layer._
+* `190-199`: Under water. Above earth and most landuse.
+* `290-299`: Under roads. Above borders, water, landuse, and earth. **Your classic "underlay".**
+* `490-499`: Over all line and polygon features. Under map labels (icons and text), under UI elements (like routeline and search result pins). **Your classic raster map overlay.**  
+
+**Tangram scene file example:**
+
+```
+draw:
+    polygons:
+        order: 490
+```
+
 ### Layer reference
 
 Mapzen vector tiles include 9 layers:   
@@ -173,7 +188,7 @@ Mapzen calculates the `landuse_kind` value by intercutting `buildings` with the 
 
 **Building kind values:**
 
-* Buildings polygons and label_position points have `kind` values that are a straight passthru of the raw OpenStreetMap `building=*` and `building:part` values.
+* Buildings polygons and label_position points either have `kind` values that are a straight passthru of the raw OpenStreetMap `building=*` and `building:part` values. Label position points may also be one of `closed` or `historical` if the original building name ended in "(closed)" or "(historical)", respectively. These points will have a `min_zoom` of 17, suggesting that they are suitable for display only at high zooms.
 * If either of `building=*` and `building:part` is `yes`, the `kind` property is dropped (and `kind:building` is implied).
 * Address points are `kind` of value `address`.
 
@@ -297,11 +312,13 @@ The `pois` layer should be used in conjuction with `landuse` (parks, etc) label_
 
 Points of interest from OpenStreetMap, with per-zoom selections similar to the primary [OSM.org Mapnik stylesheet](https://trac.openstreetmap.org/browser/subversion/applications/rendering/mapnik).
 
+Features from OpenStreetMap which are tagged `disused=*` for any other value than `disused=no` are not included in the data. Features which have certain parenthetical comments after their name are suppressed until zoom 17 and have their `kind` property set to that comment. Currently anything with a name ending in '(closed)' or '(historical)' will be suppressed in this manner.
+
 **POI properties (common):**
 
 * `name`
 * `id`: osm_id
-* `kind`: combination of the `aerialway`, `aeroway`, `amenity`, `attraction`, `barrier`, `craft`, `highway`, `historic`, `leisure`, `lock`, `man_made`, `natural`, `office`, `power`, `railway`, `rental`, `shop`, `tourism`, `waterway`, and `zoo` tags.
+* `kind`: combination of the `aerialway`, `aeroway`, `amenity`, `attraction`, `barrier`, `craft`, `highway`, `historic`, `leisure`, `lock`, `man_made`, `natural`, `office`, `power`, `railway`, `rental`, `shop`, `tourism`, `waterway`, and `zoo` tags. Can also be one of `closed` or `historical` if the original feature was parenthetically commented as closed or historical.
 
 Implied but not stated: `source`: `openstreetmap.org`.
 
@@ -314,8 +331,18 @@ Implied but not stated: `source`: `openstreetmap.org`.
 * `ref`: generally only for `gate` and `station_entrance` features
 * `religion`:
 * `sport`:
-* `transit_routes`: only on `kind:station` transit related features
 * `zoo`:
+
+**POI properties (only on `kind:station`):**
+
+* `state`: only on `kind:station`, status of the station. Values include: `proposed`, `connection`, `inuse`, `alternate`, `temporary`.
+* `*_routes`: a list of the reference name/number or full name (if there is no `ref`) of the OSM route relations which are reachable by exploring the local public transport relations or site relations. These are:
+  * `train_routes` a list of train routes, generally above-ground and commuter or inter-city "heavy" rail.
+  * `subway_routes` a list of subway or underground routes, generally underground commuter rail.
+  * `light_rail_routes` a list of light rail or rapid-transit passenger train routes.
+  * `tram_routes` a list of tram routes.
+* `is_*` a set of boolean flags indicating whether this station has any routes of the given type. These are: `is_train`, `is_subway`, `is_light_rail`, `is_tram`, corresponding to the above `*_routes`. This is provided as a convenience for styling.
+* `root_relation_id` an integer ID (of an OSM relation) which can be used to link or group together features which are related by being part of a larger feature. A full explanation of [relations](http://wiki.openstreetmap.org/wiki/Relation) wouldn't fit here, but the general idea is that all the station features which are part of the same [site](http://wiki.openstreetmap.org/wiki/Relation:site), [stop area](http://wiki.openstreetmap.org/wiki/Tag:public_transport%3Dstop_area) or [stop area group](http://wiki.openstreetmap.org/wiki/Relation:public_transport) should have the same ID to show they're related. Note that this information is only present on some stations.
 
 
 **POI kind values:**
@@ -354,6 +381,7 @@ To improve performance, some road segments are merged at low and mid-zooms. To f
 * `ferry`: See kind list below.
 * `highway`: See kind list below.
 * `is_bridge`: `yes` or `no`
+* `is_bus_route`: If present and `true`, then buses or trolley-buses travel down this road. This property is determined based on whether the road is part of an OSM bus route relation, and is only present on roads at zoom 12 and higher.
 * `is_link`: `yes` or `no`
 * `is_tunnel`: `yes` or `no`
 * `leisure`: See kind list below.
@@ -398,7 +426,9 @@ To improve performance, some road segments are merged at low and mid-zooms. To f
 
 ![image](images/mapzen-vector-tile-docs-roads-railway.png)
 
-**Rail** is added starting at zoom 11, with minor railroad `spur` added at zoom 12+ (based on "service" values), and further detail for `yard` and `crossover` and 13 and 14 respectively with all railroads shown by zoom 15. Additional properties are available for rail features in the `transit` layer.
+**Rail** is added starting at zoom 11, with minor railroad `spur` added at zoom 12+ (based on "service" values), and further detail for `yard` and `crossover` and 13 and 14 respectively with all railroads shown by zoom 15. Features for rail tracks are included in this layer, whereas geometries and further information about rail lines or routes is available in the `transit` layer.
+
+Railway values in this layer include: `rail`, `tram`, `light_rail`, `narrow_gauge`, `monorail`, `subway`, and `funicular`.
 
 ![image](images/mapzen-vector-tile-docs-roads-airport.png)
 
@@ -425,7 +455,7 @@ To improve performance, some road segments are merged at low and mid-zooms. To f
 * Layer name: `transit`
 * Geometry types: `line`, `polygon`
 
-Transit line features from OpenStreetMap start appearing at zoom 6+ for basic rail of `train`, and `railway`. Then `subway`,`light_rail`, and `tram` are added at zoom 10+. Platform polygons are added zoom 14+.
+Transit line features from OpenStreetMap start appearing at zoom 5+ for national trains, with regional trains addded at zoom 6+. Then `subway`,`light_rail`, and `tram` are added at zoom 10+. `funicular` and `monorail` features are added at zoom 12+. Platform polygons are added zoom 14+.
 
 _TIP: If you're looking for transit `station` and `station_entrance` features, look in the `pois` layer instead._
 
