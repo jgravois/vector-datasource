@@ -4,6 +4,7 @@ from jinja2 import FileSystemLoader
 from TileStache.Goodies.VecTiles.transform import _parse_kt
 import os.path
 import csv
+import yaml
 
 Rule = namedtuple(
     'Rule',
@@ -70,7 +71,8 @@ def format_calc_value(value):
     if value.startswith('${') and value.endswith('}'):
         calc_value = value[2:-1]
     else:
-        calc_value = format_string_value(value)
+        # calc_value = format_string_value(value)
+        calc_value = value
     return calc_value
 
 
@@ -198,42 +200,59 @@ def create_yaml_from_rules(kind_rules, min_zoom_rules):
         # assume rule is the same
         rule = kind_rule
         if rule.equals:
-            equals_filter = dict(rule.equals)
+            # equals_filter = dict(rule.equals)
+            equals_filter = {}
+            for k, v in rule.equals:
+                equals_filter[k.key] = v
         if rule.not_equals:
-            not_equals_filter = dict(rule.not_equals)
+            # not_equals_filter = dict(rule.not_equals)
+            not_equals_filter = {}
+            for k, v in rule.not_equals:
+                not_equals_filter[k.key] = v
         if rule.exists:
-            exists_filter = dict([(x, True) for x in rule.exists])
+            # exists_filter = dict([(x, True) for x in rule.exists])
+            exists_filter = dict([(x.key, True) for x in rule.exists])
         if rule.not_exists:
-            not_exists_filter = dict([(x, False) for x in rule.not_exists])
+            # not_exists_filter = dict([(x, False) for x in rule.not_exists])
+            not_exists_filter = dict([(x.key, False) for x in rule.not_exists])
         if rule.set_memberships:
-            any_of_filter = rule.set_memberships
+            # any_of_filter = rule.set_memberships
+            any_of_filter = dict([(k.key, v) for k, v in rule.set_memberships])
         if rule.default_rule:
             assert 0, 'we got a default rule!'
 
         yaml_datum = {}
+        yaml_filter = {}
 
         if not_equals_filter:
             not_datum = None
             if (equals_filter or exists_filter or not_exists_filter or
                     any_of_filter):
-                yaml_datum['all'] = not_datum = {}
+                yaml_filter['all'] = not_datum = {}
             else:
-                not_datum = yaml_datum
-            not_datum.update(not_equals_filter)
+                not_datum = yaml_filter
+            not_datum['not'] = not_equals_filter
 
         if equals_filter:
-            yaml_datum.update(equals_filter)
+            yaml_filter.update(equals_filter)
 
         if exists_filter:
-            yaml_datum.update(exists_filter)
+            yaml_filter.update(exists_filter)
 
         if not_exists_filter:
-            yaml_datum.update(not_exists_filter)
+            yaml_filter.update(not_exists_filter)
 
         if any_of_filter:
-            yaml_datum.update(any_of_filter)
+            yaml_filter.update(any_of_filter)
+
+        yaml_datum['filter'] = yaml_filter
+        yaml_datum['output'] = dict(kind=kind_rule.calc)
+        yaml_datum['min_zoom'] = min_zoom_rule.calc
 
         yaml_data.append(yaml_datum)
+
+    return yaml_data
+
 
 def used_params(rules):
     used = set()
@@ -311,6 +330,13 @@ for layer in ('landuse', 'pois', 'transit', 'water'):
                     kind_rule = create_rule(keys, row, kind_calc)
                     kind_rules.append(kind_rule)
 
+    layer_yaml = create_yaml_from_rules(kind_rules, min_zoom_rules)
+
+    with open('%s.yaml' % layer, 'w') as fp:
+        yaml.dump(layer_yaml, fp)
+
+    continue
+
     osm_tags = set([Key(table='osm', key='tags', typ='hstore'),
                     Key(table=None, key='tags', typ='hstore')])
     params = ((used_params(kind_rules) | used_params(min_zoom_rules))
@@ -324,6 +350,9 @@ for layer in ('landuse', 'pois', 'transit', 'water'):
         kind_case_statement=kind_case_statement,
         min_zoom_case_statement=min_zoom_case_statement,
     )
+
+import sys
+sys.exit(0)
 
 template_name = os.path.join(script_root, 'sql.jinja2')
 environment = Environment(loader=FileSystemLoader('.'))
