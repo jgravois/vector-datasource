@@ -183,6 +183,58 @@ def create_case_statement(rules):
     return case_statement
 
 
+def create_yaml_from_rules(kind_rules, min_zoom_rules):
+    yaml_data = []
+
+    for kind_rule, min_zoom_rule in zip(kind_rules, min_zoom_rules):
+        equals_filter = None
+        not_equals_filter = None
+        exists_filter = None
+        not_exists_filter = None
+        any_of_filter = None
+
+        # NOTE: probably don't need to have these two separate sections
+
+        # assume rule is the same
+        rule = kind_rule
+        if rule.equals:
+            equals_filter = dict(rule.equals)
+        if rule.not_equals:
+            not_equals_filter = dict(rule.not_equals)
+        if rule.exists:
+            exists_filter = dict([(x, True) for x in rule.exists])
+        if rule.not_exists:
+            not_exists_filter = dict([(x, False) for x in rule.not_exists])
+        if rule.set_memberships:
+            any_of_filter = rule.set_memberships
+        if rule.default_rule:
+            assert 0, 'we got a default rule!'
+
+        yaml_datum = {}
+
+        if not_equals_filter:
+            not_datum = None
+            if (equals_filter or exists_filter or not_exists_filter or
+                    any_of_filter):
+                yaml_datum['all'] = not_datum = {}
+            else:
+                not_datum = yaml_datum
+            not_datum.update(not_equals_filter)
+
+        if equals_filter:
+            yaml_datum.update(equals_filter)
+
+        if exists_filter:
+            yaml_datum.update(exists_filter)
+
+        if not_exists_filter:
+            yaml_datum.update(not_exists_filter)
+
+        if any_of_filter:
+            yaml_datum.update(any_of_filter)
+
+        yaml_data.append(yaml_datum)
+
 def used_params(rules):
     used = set()
 
@@ -240,6 +292,14 @@ for layer in ('landuse', 'pois', 'transit', 'water'):
                 kind_calc = row.pop(-1)
                 # and next is the min_zoom calculation
                 min_zoom_calc = row.pop(-1)
+
+                if min_zoom_calc and min_zoom_calc == '*':
+                    import pdb; pdb.set_trace();
+                    assert 0, 'need min zoom calc stub'
+
+                if kind_calc and kind_calc == '*':
+                    import pdb; pdb.set_trace();
+                    assert 0, 'need kind calc stub'
 
                 if min_zoom_calc and min_zoom_calc != '*':
                     min_zoom_calc = format_calc_value(min_zoom_calc)
