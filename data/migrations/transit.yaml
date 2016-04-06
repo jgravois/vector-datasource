@@ -1,51 +1,51 @@
 - filter:
     route: train
     service: [high_speed, long_distance, international]
-  min_zoom: '5'
+  min_zoom: 5
   output: {kind: route}
 - filter: {route: train}
-  min_zoom: '6'
+  min_zoom: 6
   output: {kind: train}
 - filter: {route: subway}
-  min_zoom: '8'
+  min_zoom: 8
   output: {kind: subway}
 - filter:
     route: [light_rail, tram]
-  min_zoom: '9'
+  min_zoom: 9
   output: {kind: route}
 - filter:
     route: [funicular, monorail]
-  min_zoom: '12'
+  min_zoom: 12
   output: {kind: route}
 - filter:
     railway: [halt, stop, tram_stop]
-  min_zoom: '13'
+  min_zoom: 13
   output: {kind: railway}
 - filter: {highway: platform}
-  min_zoom: '17'
+  min_zoom: 17
   output: {kind: bus_stop}
 - filter: {public_transport: platform, tags->rail: 'yes'}
-  min_zoom: '15'
+  min_zoom: 15
   output: {kind: platform}
 - filter: {public_transport: platform, tags->light_rail: 'yes'}
-  min_zoom: '15'
+  min_zoom: 15
   output: {kind: platform}
 - filter: {public_transport: platform, tags->bus: 'yes'}
-  min_zoom: '17'
+  min_zoom: 17
   output: {kind: bus_stop}
 - filter: {public_transport: platform}
-  min_zoom: '15'
+  min_zoom: 15
   output: {kind: platform}
 - filter: {public_transport: stop_area}
-  min_zoom: '15'
+  min_zoom: 15
   output: {kind: stop_area}
 - filter:
     railway: [platform, station]
-  min_zoom: '15'
+  min_zoom: 15
   output: {kind: railway}
 - filter: {tags->site: stop_area}
-  min_zoom: '15'
+  min_zoom: 15
   output: {kind: stop_area}
 - filter: {highway: bus_stop}
-  min_zoom: '17'
+  min_zoom: 17
   output: {kind: bus_stop}
