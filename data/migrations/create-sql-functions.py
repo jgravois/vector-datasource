@@ -1,20 +1,22 @@
 from collections import namedtuple
 from jinja2 import Environment
 from jinja2 import FileSystemLoader
-from TileStache.Goodies.VecTiles.transform import _parse_kt
 import os.path
 import yaml
 
 
-def format_string_value(s):
-    return "'%s'" % s
+def format_value(s):
+    if s.startswith('$'):
+        return s[1:]
+    else:
+        return "'%s'" % s
 
 
-def format_key(k):
+def format_column(k):
     if k.startswith('tags->'):
         val = "tags->'%s'" % (k[len('tags->'):])
     else:
-        val = format_string_value(k)
+        val = '"%s"' % k
     return val
 
 
@@ -26,8 +28,23 @@ class EqualsRule(object):
 
     def as_sql(self):
         return '%s = %s' % (
-            format_key(self.column),
-            format_string_value(self.value))
+            format_column(self.column),
+            format_value(self.value))
+
+    def columns(self):
+        return [self.column]
+
+
+class NotEqualsRule(object):
+
+    def __init__(self, column, value):
+        self.column = column
+        self.value = value
+
+    def as_sql(self):
+        return '%s <> %s' % (
+            format_column(self.column),
+            format_value(self.value))
 
     def columns(self):
         return [self.column]
@@ -40,10 +57,34 @@ class SetRule(object):
         self.values = values
 
     def as_sql(self):
-        formatted_values = map(format_string_value, self.values)
+        formatted_values = map(format_value, self.values)
         return '%s IN (%s)' % (
-            format_key(self.column),
+            format_column(self.column),
             ', '.join(formatted_values))
+
+    def columns(self):
+        return [self.column]
+
+
+class ExistsRule(object):
+
+    def __init__(self, column):
+        self.column = column
+
+    def as_sql(self):
+        return '%s IS NOT NULL' % format_column(self.column)
+
+    def columns(self):
+        return [self.column]
+
+
+class NotExistsRule(object):
+
+    def __init__(self, column):
+        self.column = column
+
+    def as_sql(self):
+        return '%s IS NULL' % format_column(self.column)
 
     def columns(self):
         return [self.column]
@@ -112,7 +153,14 @@ def create_filter_rule(filter_key, filter_value):
         if isinstance(filter_value, list):
             rule = SetRule(filter_key, filter_value)
         else:
-            rule = EqualsRule(filter_key, filter_value)
+            if filter_value is True:
+                rule = ExistsRule(filter_key)
+            elif filter_value is False:
+                rule = NotExistsRule(filter_key)
+            elif filter_value.startswith('-'):
+                rule = NotEqualsRule(filter_key, filter_value[1:])
+            else:
+                rule = EqualsRule(filter_key, filter_value)
     return rule
 
 
@@ -125,13 +173,30 @@ class Matcher(object):
         self.table = table
 
     def when_sql_output(self):
-        hstore_output = ','.join(
-            ['%s=>%s' % (k, v) for k, v in self.output.items()])
-        return "WHEN %s THEN HSTORE('%s')" % (
-            self.rule.as_sql(), hstore_output)
+        hstore_items = []
+        for k, v in self.output.items():
+            if v is None:
+                continue
+            hstore_item = '%s=>%s' % (k, v)
+            hstore_items.append(hstore_item)
+        hstore_output = ','.join(hstore_items)
+        # return "WHEN %s THEN HSTORE('%s')" % (
+        #     self.rule.as_sql(), hstore_output)
+        # TODO testing code - remove this and uncomment above
+        kind = self.output['kind']
+        if kind is None:
+            kind = 'NULL'
+        else:
+            kind = "'%s'" % kind
+        return "WHEN %s THEN %s" % (
+            self.rule.as_sql(), kind)
 
     def when_sql_min_zoom(self):
-        return 'WHEN %s THEN %s' % (self.rule.as_sql(), self.min_zoom)
+        if self.min_zoom is None:
+            min_zoom = 'NULL'
+        else:
+            min_zoom = self.min_zoom
+        return 'WHEN %s THEN %s' % (self.rule.as_sql(), min_zoom)
 
 
 def create_matcher(yaml_datum):
@@ -196,7 +261,8 @@ for layer in ('landuse', 'pois', 'transit', 'water'):
         columns = matcher.rule.columns()
         for column in columns:
             if not column.startswith('tags'):
-                key = Key(table=matcher.table, key=column, typ='text')
+                key = Key(
+                    table=matcher.table, key=format_column(column), typ='text')
                 params.add(key)
 
     # osm_tags = set([Key(table='osm', key='tags', typ='hstore'),

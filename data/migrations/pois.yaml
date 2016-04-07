@@ -1,7 +1,6 @@
-- filter:
-    not: {disused: 'no'}
-  min_zoom: 'NULL'
-  output: {kind: 'NULL'}
+- filter: {disused: -no}
+  min_zoom: null
+  output: {kind: null}
 - filter:
     aeroway: [aerodrome, airport]
   min_zoom: LEAST(zoom + 4.12, 13)
