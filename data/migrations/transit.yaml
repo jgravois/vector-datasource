@@ -2,7 +2,8 @@
     route: train
     service: [high_speed, long_distance, international]
   min_zoom: 5
-  output: {kind: route}
+  output:
+    kind: {col: route}
 - filter: {route: train}
   min_zoom: 6
   output: {kind: train}
@@ -12,15 +13,18 @@
 - filter:
     route: [light_rail, tram]
   min_zoom: 9
-  output: {kind: route}
+  output:
+    kind: {col: route}
 - filter:
     route: [funicular, monorail]
   min_zoom: 12
-  output: {kind: route}
+  output:
+    kind: {col: route}
 - filter:
     railway: [halt, stop, tram_stop]
   min_zoom: 13
-  output: {kind: railway}
+  output:
+    kind: {col: railway}
 - filter: {highway: platform}
   min_zoom: 17
   output: {kind: bus_stop}
@@ -42,7 +46,8 @@
 - filter:
     railway: [platform, station]
   min_zoom: 15
-  output: {kind: railway}
+  output:
+    kind: {col: railway}
 - filter: {tags->site: stop_area}
   min_zoom: 15
   output: {kind: stop_area}

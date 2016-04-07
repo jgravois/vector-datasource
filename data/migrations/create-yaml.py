@@ -18,6 +18,9 @@ Key = namedtuple(
 )
 
 
+CalcValue = namedtuple('CalcValue', 'value typ')
+
+
 def _parse_kt_table(kt):
     table = None
 
@@ -70,6 +73,19 @@ def format_string_value(value):
 def format_calc_value(value):
     if value.startswith('${') and value.endswith('}'):
         calc_value = value[2:-1]
+        if calc_value == 'NULL':
+            return CalcValue(None, 'expr')
+        else:
+            return CalcValue(calc_value, 'col')
+    else:
+        # calc_value = format_string_value(value)
+        return CalcValue(value, 'value')
+
+
+def parse_calc_value(value):
+    if value.startswith('${') and value.endswith('}'):
+        calc_value = value[2:-1]
+        # NOTE: probably need a heuristic here to determine if it's a variable reference or expression
         if calc_value == 'NULL':
             return None
     else:
@@ -275,7 +291,22 @@ def create_yaml_from_rules(kind_rules, min_zoom_rules):
             yaml_filter.update(any_of_filter)
 
         yaml_datum['filter'] = yaml_filter
-        yaml_datum['output'] = dict(kind=kind_rule.calc)
+        if kind_rule.calc.typ == 'expr':
+            kind_value = dict(expr=kind_rule.calc.value)
+        elif kind_rule.calc.typ == 'col':
+            if kind_rule.calc.value.startswith('tags->'):
+                kind_value = dict(col=kind_rule.calc.value.replace("'", ''))
+            elif kind_rule.calc.value == '"natural"':
+                kind_value = dict(col='natural')
+            else:
+                kind_value = dict(col=kind_rule.calc.value)
+        elif kind_rule.calc.typ == 'value':
+            kind_value = kind_rule.calc.value
+        else:
+            assert 0, 'bad typ: %s' % kind_rule.calc.typ
+
+        yaml_datum['output'] = dict(kind=kind_value)
+
         try:
             min_zoom_val = int(min_zoom_rule.calc)
         except (TypeError, ValueError):
@@ -349,8 +380,13 @@ for layer in ('landuse', 'pois', 'transit', 'water'):
                 min_zoom_calc = row.pop(-1)
 
                 if min_zoom_calc:
-                    min_zoom_calc = format_calc_value(min_zoom_calc)
-                    min_zoom_rule = create_rule(keys, row, min_zoom_calc)
+                    assert (min_zoom_calc.startswith('${') and
+                            min_zoom_calc.endswith('}')), '%s' % min_zoom_calc
+                    val = min_zoom_calc[2:-1]
+                    if val == 'NULL':
+                        val = None
+                    min_zoom_calc = CalcValue(val, 'expr')
+                    min_zoom_rule = create_rule(keys, row, val)
                     min_zoom_rules.append(min_zoom_rule)
 
                 if kind_calc:

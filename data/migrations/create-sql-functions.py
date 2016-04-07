@@ -5,11 +5,23 @@ import os.path
 import yaml
 
 
-def format_value(s):
-    if s.startswith('$'):
-        return s[1:]
-    else:
-        return "'%s'" % s
+def format_value(val):
+    if isinstance(val, dict):
+        if 'expr' in val:
+            if val['expr'] is None:
+                return 'NULL'
+            else:
+                return val['expr']
+        elif 'col' in val:
+            if val['col'].startswith('tags->'):
+                return "tags->'%s'" % val['col'][len('tags->'):]
+            else:
+                return '"%s"' % val['col']
+        elif 'value' in val:
+            return "'%s'" % val['value']
+        else:
+            assert 0, 'Unknown dict value: %r' % val
+    return "'%s'" % val
 
 
 def format_column(k):
@@ -175,19 +187,14 @@ class Matcher(object):
     def when_sql_output(self):
         hstore_items = []
         for k, v in self.output.items():
-            if v is None:
-                continue
+            v = format_value(v)
             hstore_item = '%s=>%s' % (k, v)
             hstore_items.append(hstore_item)
         hstore_output = ','.join(hstore_items)
         # return "WHEN %s THEN HSTORE('%s')" % (
         #     self.rule.as_sql(), hstore_output)
         # TODO testing code - remove this and uncomment above
-        kind = self.output['kind']
-        if kind is None:
-            kind = 'NULL'
-        else:
-            kind = "'%s'" % kind
+        kind = format_value(self.output['kind'])
         return "WHEN %s THEN %s" % (
             self.rule.as_sql(), kind)
 
@@ -210,7 +217,9 @@ def create_matcher(yaml_datum):
     else:
         rule = rules[0]
     min_zoom = yaml_datum['min_zoom']
+
     output = yaml_datum['output']
+
     table = yaml_datum.get('table')
     matcher = Matcher(rule, min_zoom, output, table)
     return matcher
@@ -261,8 +270,12 @@ for layer in ('landuse', 'pois', 'transit', 'water'):
         columns = matcher.rule.columns()
         for column in columns:
             if not column.startswith('tags'):
+                if column == 'gid':
+                    typ = 'integer'
+                else:
+                    typ = 'text'
                 key = Key(
-                    table=matcher.table, key=format_column(column), typ='text')
+                    table=matcher.table, key=format_column(column), typ=typ)
                 params.add(key)
 
     # osm_tags = set([Key(table='osm', key='tags', typ='hstore'),
